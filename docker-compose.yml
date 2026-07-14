@@ -1,0 +1,91 @@
+# =============================================================================
+# SafeStreet - Docker Compose
+# Spins up PostgreSQL (with PostGIS for geospatial queries), Redis (pub/sub
+# for horizontally-scaled WebSocket gateways via socket.io-redis-adapter),
+# the NestJS API, and the React (Vite) frontend.
+# =============================================================================
+version: "3.9"
+
+services:
+  postgres:
+    # postgis/postgis image = Postgres 15 + PostGIS extension pre-installed.
+    # This gives us native geometry(Point, 4326) columns + ST_DWithin for
+    # accurate "within 50m" duplicate-detection queries instead of doing
+    # pure Haversine math in application code.
+    image: postgis/postgis:15-3.4
+    container_name: safestreet_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-safestreet}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-safestreet_pw}
+      POSTGRES_DB: ${POSTGRES_DB:-safestreet}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-safestreet}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: safestreet_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: safestreet_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-safestreet}:${POSTGRES_PASSWORD:-safestreet_pw}@postgres:5432/${POSTGRES_DB:-safestreet}?schema=public
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    # Some filesystems (Docker Desktop on Mac/Windows) don't propagate
+    # inotify file-change events into the container reliably. If hot-reload
+    # doesn't seem to trigger, uncomment this to force polling instead:
+    # environment:
+    #   CHOKIDAR_USEPOLLING: "true"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: safestreet_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    env_file:
+      - ./frontend/.env
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+volumes:
+  pgdata:
+  redisdata:
