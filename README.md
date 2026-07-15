@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # SafeStreet — AI-Powered Community Incident Reporting Platform
 
 Full-stack platform for citizens to report municipal issues (potholes, streetlight
@@ -107,3 +108,6 @@ npm run dev
 - Consider adding rate limiting (`@nestjs/throttler`) on `/auth/*` endpoints.
 - Swap the mock Base64 image storage for real object storage (S3/GCS) once
   volume grows — Base64 in Postgres text columns won't scale indefinitely.
+=======
+# SafeStreet-WebTechProject
+>>>>>>> 5735861428eaeb675dc8d90743c2b5ca2b1a1cc5
